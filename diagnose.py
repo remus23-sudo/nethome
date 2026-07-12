@@ -67,9 +67,15 @@ def main() -> int:
         print(f"repr(): {appliance!r}")
         dump("attributes from find_appliances()", appliance)
 
-        appliance_id = getattr(appliance, "id", None)
+        state_obj = getattr(appliance, "state", None)
+        if state_obj is not None:
+            dump("attributes on appliance.state", state_obj)
+
+        appliance_id = getattr(appliance, "id", None) or getattr(
+            state_obj, "id", None
+        )
         if appliance_id is None:
-            print("  (no id attribute found, cannot refresh via cloud)")
+            print("  (no id found on appliance or appliance.state, cannot refresh)")
             continue
 
         print()
@@ -81,7 +87,20 @@ def main() -> int:
 
         print(f"repr() after cloud refresh: {refreshed!r}")
         dump("attributes after cloud refresh", refreshed)
+        refreshed_state = getattr(refreshed, "state", None)
+        if refreshed_state is not None:
+            dump("attributes on refreshed.state", refreshed_state)
         print()
+
+    # Hunt for any raw/unparsed cloud response that might still carry a
+    # humidity field the library's Appliance classes don't expose.
+    print("=" * 70)
+    print("Looking for raw cloud response data cached on the cloud object...")
+    for key, value in vars(cloud).items():
+        text = repr(value)
+        if len(text) > 2000:
+            text = text[:2000] + "... [truncated]"
+        print(f"  cloud.{key!r}: {text}")
 
     print("=" * 70)
     print("Done. Look through the attribute dumps above for anything")
