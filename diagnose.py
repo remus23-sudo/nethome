@@ -118,6 +118,15 @@ def main() -> int:
             for m in sorted(dir(refreshed_state)):
                 if not m.startswith("_"):
                     print(f"  {m}")
+
+        print("-- signatures for writing state (not calling them) --")
+        for method_name in ("set_state", "apply", "refresh", "update"):
+            method = getattr(refreshed, method_name, None)
+            if method is not None:
+                try:
+                    print(f"  refreshed.{method_name}{inspect.signature(method)}")
+                except (TypeError, ValueError):
+                    print(f"  refreshed.{method_name}: signature unavailable")
         print()
 
     # Hunt for any raw/unparsed cloud response that might still carry a
