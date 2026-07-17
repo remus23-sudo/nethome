@@ -136,11 +136,21 @@ def main() -> int:
           f"target={ac.state.target_temperature} fan={ac.state.fan_speed}")
     print(f"Saved override state present: {saved is not None}")
 
+    ac_in_dry = ac.state.mode == MIDEA_DRY_MODE and ac.state.running
+
     if humidity > HUMIDITY_TRIGGER and saved is None:
         snapshot = current_snapshot(ac)
         save_state(snapshot)
         print(f"Humidity above {HUMIDITY_TRIGGER}% — saving state {snapshot} "
               f"and switching to dry mode.")
+        ac.set_state(mode=MIDEA_DRY_MODE, running=True, cloud=cloud)
+
+    elif humidity > HUMIDITY_TRIGGER and saved is not None and not ac_in_dry:
+        print(f"Humidity still above {HUMIDITY_TRIGGER}% and an override is "
+              f"recorded, but the AC isn't actually in dry mode (mode="
+              f"{ac.state.mode} running={ac.state.running}) — something else "
+              f"must have changed it. Re-asserting dry mode without touching "
+              f"the saved original state.")
         ac.set_state(mode=MIDEA_DRY_MODE, running=True, cloud=cloud)
 
     elif humidity < HUMIDITY_RESET and saved is not None:
