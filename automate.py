@@ -44,9 +44,10 @@ MIDEA_DRY_MODE = 3
 STATE_FILE = Path("state.json")
 
 
-# --- Govee humidity -----------------------------------------------------
+# --- Govee sensor readings ------------------------------------------------
 
-def get_humidity(api_key: str) -> float:
+def get_govee_reading(api_key: str) -> tuple[float, float]:
+    """Returns (humidity_pct, temperature_f) from the Govee sensor."""
     headers = {"Govee-API-Key": api_key, "Content-Type": "application/json"}
     body = {
         "requestId": str(uuid.uuid4()),
@@ -56,11 +57,23 @@ def get_humidity(api_key: str) -> float:
         f"{GOVEE_BASE_URL}/device/state", headers=headers, json=body, timeout=15
     )
     resp.raise_for_status()
-    payload = resp.json()["payload"]
-    for cap in payload["capabilities"]:
-        if cap.get("instance") == "sensorHumidity":
-            return float(cap["state"]["value"])
-    raise RuntimeError("sensorHumidity not found in Govee response")
+    capabilities = resp.json()["payload"]["capabilities"]
+
+    humidity = None
+    temperature_f = None
+    for cap in capabilities:
+        instance = cap.get("instance")
+        if instance == "sensorHumidity":
+            humidity = float(cap["state"]["value"])
+        elif instance == "sensorTemperature":
+            temperature_f = float(cap["state"]["value"])
+
+    if humidity is None:
+        raise RuntimeError("sensorHumidity not found in Govee response")
+    if temperature_f is None:
+        raise RuntimeError("sensorTemperature not found in Govee response")
+
+    return humidity, temperature_f
 
 
 # --- Midea AC -------------------------------------------------------------
@@ -127,7 +140,7 @@ def main() -> int:
               "(GOVEE_API_KEY, MIDEA_ACCOUNT, MIDEA_PASSWORD).")
         return 1
 
-    humidity = get_humidity(govee_key)
+    humidity, govee_temp_f = get_govee_reading(govee_key)
     cloud, ac = get_ac(midea_account, midea_password)
     saved = load_saved_state()
 
@@ -181,6 +194,7 @@ def main() -> int:
             f.write(f"running={ac.state.running}\n")
             f.write(f"target={ac.state.target_temperature}\n")
             f.write(f"fan={ac.state.fan_speed}\n")
+            f.write(f"govee_temp_f={govee_temp_f:.1f}\n")
             f.write(f"action={action_taken}\n")
 
     return 0
