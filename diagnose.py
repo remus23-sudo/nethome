@@ -82,9 +82,9 @@ def main() -> int:
 
         print()
         try:
-            refreshed = appliance_state(cloud=cloud, id=appliance_id)
+            refreshed = appliance_state(account=account, password=password, id=appliance_id)
         except Exception as e:
-            print(f"  appliance_state(cloud=..., id={appliance_id}) failed: {e!r}")
+            print(f"  appliance_state(account=..., password=..., id={appliance_id}) failed: {e!r}")
             continue
 
         print(f"repr() after cloud refresh: {refreshed!r}")
