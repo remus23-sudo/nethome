@@ -16,10 +16,19 @@ Requires env vars:
   MIDEA_PASSWORD  - NetHome Plus account password
 """
 
+import inspect
 import os
 import sys
 
 from midea_beautiful import appliance_state, connect_to_cloud, find_appliances
+
+print("Installed appliance_state signature:")
+print(f"  {inspect.signature(appliance_state)}")
+print("Installed connect_to_cloud signature:")
+print(f"  {inspect.signature(connect_to_cloud)}")
+print("Installed find_appliances signature:")
+print(f"  {inspect.signature(find_appliances)}")
+print()
 
 
 def dump(label: str, obj) -> None:
@@ -81,10 +90,23 @@ def main() -> int:
             continue
 
         print()
+        sig = inspect.signature(appliance_state)
+        call_kwargs = {}
+        for pname in sig.parameters:
+            lname = pname.lower()
+            if "cloud" in lname:
+                call_kwargs[pname] = cloud
+            elif "id" in lname:
+                call_kwargs[pname] = appliance_id
+            elif "account" in lname or "email" in lname or "user" in lname:
+                call_kwargs[pname] = account
+            elif "password" in lname or "pass" in lname:
+                call_kwargs[pname] = password
+        print(f"  Calling appliance_state with kwargs: {list(call_kwargs.keys())}")
         try:
-            refreshed = appliance_state(account=account, password=password, id=appliance_id)
+            refreshed = appliance_state(**call_kwargs)
         except Exception as e:
-            print(f"  appliance_state(account=..., password=..., id={appliance_id}) failed: {e!r}")
+            print(f"  appliance_state(**{call_kwargs!r}) failed: {e!r}")
             continue
 
         print(f"repr() after cloud refresh: {refreshed!r}")
