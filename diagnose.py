@@ -108,6 +108,16 @@ def main() -> int:
         refreshed_state = getattr(refreshed, "state", None)
         if refreshed_state is not None:
             dump("attributes on refreshed.state", refreshed_state)
+
+        print("-- methods available on refreshed (LanDevice) --")
+        for m in sorted(dir(refreshed)):
+            if not m.startswith("_"):
+                print(f"  {m}")
+        if refreshed_state is not None:
+            print("-- methods available on refreshed.state --")
+            for m in sorted(dir(refreshed_state)):
+                if not m.startswith("_"):
+                    print(f"  {m}")
         print()
 
     # Hunt for any raw/unparsed cloud response that might still carry a
