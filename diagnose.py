@@ -71,8 +71,10 @@ def main() -> int:
         if state_obj is not None:
             dump("attributes on appliance.state", state_obj)
 
-        appliance_id = getattr(appliance, "id", None) or getattr(
-            state_obj, "id", None
+        appliance_id = (
+            getattr(appliance, "id", None)
+            or getattr(state_obj, "id", None)
+            or getattr(state_obj, "_id", None)
         )
         if appliance_id is None:
             print("  (no id found on appliance or appliance.state, cannot refresh)")
