@@ -137,6 +137,7 @@ def main() -> int:
     print(f"Saved override state present: {saved is not None}")
 
     ac_in_dry = ac.state.mode == MIDEA_DRY_MODE and ac.state.running
+    action_taken = "no action"
 
     if humidity > HUMIDITY_TRIGGER and saved is None:
         snapshot = current_snapshot(ac)
@@ -144,6 +145,7 @@ def main() -> int:
         print(f"Humidity above {HUMIDITY_TRIGGER}% — saving state {snapshot} "
               f"and switching to dry mode.")
         ac.set_state(mode=MIDEA_DRY_MODE, running=True, cloud=cloud)
+        action_taken = "turned ON (switched to dry mode)"
 
     elif humidity > HUMIDITY_TRIGGER and saved is not None and not ac_in_dry:
         print(f"Humidity still above {HUMIDITY_TRIGGER}% and an override is "
@@ -152,6 +154,7 @@ def main() -> int:
               f"must have changed it. Re-asserting dry mode without touching "
               f"the saved original state.")
         ac.set_state(mode=MIDEA_DRY_MODE, running=True, cloud=cloud)
+        action_taken = "turned ON (re-asserted dry mode)"
 
     elif humidity < HUMIDITY_RESET and saved is not None:
         print(f"Humidity below {HUMIDITY_RESET}% — restoring saved state {saved}.")
@@ -163,9 +166,22 @@ def main() -> int:
             cloud=cloud,
         )
         clear_state()
+        action_taken = (
+            "restored to ON" if saved["running"] else "turned OFF (restored)"
+        )
 
     else:
         print("No action needed this run.")
+
+    github_output = os.environ.get("GITHUB_OUTPUT")
+    if github_output:
+        with open(github_output, "a") as f:
+            f.write(f"humidity={humidity}\n")
+            f.write(f"mode={ac.state.mode}\n")
+            f.write(f"running={ac.state.running}\n")
+            f.write(f"target={ac.state.target_temperature}\n")
+            f.write(f"fan={ac.state.fan_speed}\n")
+            f.write(f"action={action_taken}\n")
 
     return 0
 
