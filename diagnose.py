@@ -90,23 +90,17 @@ def main() -> int:
             continue
 
         print()
-        sig = inspect.signature(appliance_state)
-        call_kwargs = {}
-        for pname in sig.parameters:
-            lname = pname.lower()
-            if "cloud" in lname:
-                call_kwargs[pname] = cloud
-            elif "id" in lname:
-                call_kwargs[pname] = appliance_id
-            elif "account" in lname or "email" in lname or "user" in lname:
-                call_kwargs[pname] = account
-            elif "password" in lname or "pass" in lname:
-                call_kwargs[pname] = password
-        print(f"  Calling appliance_state with kwargs: {list(call_kwargs.keys())}")
+        print("  Calling appliance_state(cloud=..., use_cloud=True, "
+              "appliance_id=..., appliance_type='0xAC')")
         try:
-            refreshed = appliance_state(**call_kwargs)
+            refreshed = appliance_state(
+                cloud=cloud,
+                use_cloud=True,
+                appliance_id=appliance_id,
+                appliance_type="0xAC",
+            )
         except Exception as e:
-            print(f"  appliance_state(**{call_kwargs!r}) failed: {e!r}")
+            print(f"  appliance_state(...) failed: {e!r}")
             continue
 
         print(f"repr() after cloud refresh: {refreshed!r}")
