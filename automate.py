@@ -141,7 +141,7 @@ def main() -> int:
         save_state(snapshot)
         print(f"Humidity above {HUMIDITY_TRIGGER}% — saving state {snapshot} "
               f"and switching to dry mode.")
-        ac.set_state(mode=MIDEA_DRY_MODE, running=True, target_temperature=75)
+        ac.set_state(mode=MIDEA_DRY_MODE, running=True)
         ac.apply(cloud=cloud)
 
     elif humidity < HUMIDITY_RESET and saved is not None:
