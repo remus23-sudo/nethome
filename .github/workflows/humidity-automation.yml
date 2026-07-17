@@ -51,6 +51,7 @@ jobs:
             AC state:
               mode: ${{ steps.run.outputs.mode }}
               running: ${{ steps.run.outputs.running }}
+              current indoor temp (Govee): ${{ steps.run.outputs.govee_temp_f }}°F
               target temperature: ${{ steps.run.outputs.target }}
               fan speed: ${{ steps.run.outputs.fan }}
 
