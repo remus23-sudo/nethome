@@ -26,6 +26,7 @@ jobs:
           pip install requests
 
       - name: Run automation
+        id: run
         env:
           GOVEE_API_KEY: ${{ secrets.GOVEE_API_KEY }}
           MIDEA_ACCOUNT: ${{ secrets.MIDEA_ACCOUNT }}
@@ -33,6 +34,27 @@ jobs:
           HUMIDITY_TRIGGER: ${{ vars.HUMIDITY_TRIGGER }}
           HUMIDITY_RESET: ${{ vars.HUMIDITY_RESET }}
         run: python automate.py
+
+      - name: Email status
+        if: always() && steps.run.outputs.humidity != '' && vars.EMAIL_NOTIFICATIONS == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "AC automation: ${{ steps.run.outputs.action }} (${{ steps.run.outputs.humidity }}%)"
+          to: ${{ secrets.MAIL_USERNAME }}
+          from: NetHome Automation
+          body: |
+            Humidity: ${{ steps.run.outputs.humidity }}%
+            Action: ${{ steps.run.outputs.action }}
+
+            AC state:
+              mode: ${{ steps.run.outputs.mode }}
+              running: ${{ steps.run.outputs.running }}
+              target temperature: ${{ steps.run.outputs.target }}
+              fan speed: ${{ steps.run.outputs.fan }}
 
       - name: Commit state.json if it changed
         run: |
