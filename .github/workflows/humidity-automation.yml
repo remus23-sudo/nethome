@@ -34,7 +34,10 @@ jobs:
         run: python automate.py
 
       - name: Email status
-        if: always() && steps.run.outputs.humidity != '' && vars.EMAIL_NOTIFICATIONS == 'true'
+        if: >-
+          always() && steps.run.outputs.humidity != '' &&
+          (vars.EMAIL_NOTIFICATIONS == 'All' ||
+           (vars.EMAIL_NOTIFICATIONS == 'Action' && steps.run.outputs.action_occurred == 'true'))
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
@@ -53,8 +56,33 @@ jobs:
               mode: ${{ steps.run.outputs.mode }} (${{ steps.run.outputs.mode_name }})
               running: ${{ steps.run.outputs.running }}
               current indoor temp (Govee): ${{ steps.run.outputs.govee_temp_f }}°F
+              current indoor temp (AC unit): ${{ steps.run.outputs.ac_indoor_f }}°F
               target temperature: ${{ steps.run.outputs.target }} (${{ steps.run.outputs.target_f }}F)
               fan speed: ${{ steps.run.outputs.fan }}
+
+      - name: High temperature alert email
+        if: always() && steps.run.outputs.high_temp_alert == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "⚠️ AC automation: HIGH TEMPERATURE ALERT (${{ steps.run.outputs.alert_message }})"
+          to: ${{ secrets.MAIL_USERNAME }}
+          from: NetHome Automation
+          body: |
+            Room temperature exceeded ${{ vars.MAX_TEMP_ALERT_F }}°F.
+
+            Triggered by: ${{ steps.run.outputs.alert_message }}
+
+            Govee sensor: ${{ steps.run.outputs.govee_temp_f }}°F
+            AC unit sensor: ${{ steps.run.outputs.ac_indoor_f }}°F
+
+            AC state:
+              mode: ${{ steps.run.outputs.mode }} (${{ steps.run.outputs.mode_name }})
+              running: ${{ steps.run.outputs.running }}
+              target temperature: ${{ steps.run.outputs.target }} (${{ steps.run.outputs.target_f }}F)
 
       - name: Commit state.json if it changed
         run: |
