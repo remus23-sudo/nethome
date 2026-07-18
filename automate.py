@@ -41,6 +41,14 @@ GOVEE_BASE_URL = "https://openapi.api.govee.com/router/api/v1"
 
 MIDEA_DRY_MODE = 3
 
+MIDEA_MODE_NAMES = {
+    1: "Auto",
+    2: "Cool",
+    3: "Dry",
+    4: "Heat",
+    5: "Fan",
+}
+
 STATE_FILE = Path("state.json")
 
 
@@ -188,11 +196,15 @@ def main() -> int:
 
     github_output = os.environ.get("GITHUB_OUTPUT")
     if github_output:
+        mode_name = MIDEA_MODE_NAMES.get(ac.state.mode, "Unknown")
+        target_f = ac.state.target_temperature * 9 / 5 + 32
         with open(github_output, "a") as f:
             f.write(f"humidity={humidity}\n")
             f.write(f"mode={ac.state.mode}\n")
+            f.write(f"mode_name={mode_name}\n")
             f.write(f"running={ac.state.running}\n")
             f.write(f"target={ac.state.target_temperature}\n")
+            f.write(f"target_f={target_f:.1f}\n")
             f.write(f"fan={ac.state.fan_speed}\n")
             f.write(f"govee_temp_f={govee_temp_f:.1f}\n")
             f.write(f"action={action_taken}\n")
