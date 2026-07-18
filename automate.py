@@ -39,6 +39,8 @@ COLD_ROOM_TEMP_F = 72.0
 COLD_ROOM_TRIGGER = 65.0
 COLD_ROOM_RESET = 60.0
 
+MAX_TEMP_ALERT_F = float(os.environ.get("MAX_TEMP_ALERT_F") or "80")
+
 GOVEE_SKU = "H5103"
 GOVEE_DEVICE = "A0:38:E6:E9:C0:46:12:59"
 GOVEE_BASE_URL = "https://openapi.api.govee.com/router/api/v1"
@@ -212,6 +214,16 @@ def main() -> int:
     if github_output:
         mode_name = MIDEA_MODE_NAMES.get(ac.state.mode, "Unknown")
         target_f = ac.state.target_temperature * 9 / 5 + 32
+        ac_indoor_f = ac.state.indoor_temperature * 9 / 5 + 32
+
+        high_temp_alert = govee_temp_f > MAX_TEMP_ALERT_F or ac_indoor_f > MAX_TEMP_ALERT_F
+        alert_sources = []
+        if govee_temp_f > MAX_TEMP_ALERT_F:
+            alert_sources.append(f"Govee sensor: {govee_temp_f:.1f}F")
+        if ac_indoor_f > MAX_TEMP_ALERT_F:
+            alert_sources.append(f"AC unit: {ac_indoor_f:.1f}F")
+        alert_message = "; ".join(alert_sources)
+
         with open(github_output, "a") as f:
             f.write(f"humidity={humidity}\n")
             f.write(f"mode={ac.state.mode}\n")
@@ -221,9 +233,13 @@ def main() -> int:
             f.write(f"target_f={target_f:.1f}\n")
             f.write(f"fan={ac.state.fan_speed}\n")
             f.write(f"govee_temp_f={govee_temp_f:.1f}\n")
+            f.write(f"ac_indoor_f={ac_indoor_f:.1f}\n")
             f.write(f"trigger={effective_trigger}\n")
             f.write(f"reset={effective_reset}\n")
             f.write(f"action={action_taken}\n")
+            f.write(f"action_occurred={'true' if action_taken != 'no action' else 'false'}\n")
+            f.write(f"high_temp_alert={'true' if high_temp_alert else 'false'}\n")
+            f.write(f"alert_message={alert_message}\n")
 
     return 0
 
