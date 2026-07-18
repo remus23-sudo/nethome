@@ -35,6 +35,10 @@ from midea_beautiful import appliance_state, connect_to_cloud, find_appliances
 HUMIDITY_TRIGGER = float(os.environ.get("HUMIDITY_TRIGGER") or "65")
 HUMIDITY_RESET = float(os.environ.get("HUMIDITY_RESET") or "55")
 
+COLD_ROOM_TEMP_F = 72.0
+COLD_ROOM_TRIGGER = 65.0
+COLD_ROOM_RESET = 60.0
+
 GOVEE_SKU = "H5103"
 GOVEE_DEVICE = "A0:38:E6:E9:C0:46:12:59"
 GOVEE_BASE_URL = "https://openapi.api.govee.com/router/api/v1"
@@ -152,6 +156,16 @@ def main() -> int:
     cloud, ac = get_ac(midea_account, midea_password)
     saved = load_saved_state()
 
+    if govee_temp_f < COLD_ROOM_TEMP_F:
+        effective_trigger = COLD_ROOM_TRIGGER
+        effective_reset = COLD_ROOM_RESET
+        print(f"Room temp {govee_temp_f}F is below {COLD_ROOM_TEMP_F}F — using "
+              f"cold-room thresholds: trigger={effective_trigger} "
+              f"reset={effective_reset}")
+    else:
+        effective_trigger = HUMIDITY_TRIGGER
+        effective_reset = HUMIDITY_RESET
+
     print(f"Humidity: {humidity}%")
     print(f"AC state: mode={ac.state.mode} running={ac.state.running} "
           f"target={ac.state.target_temperature} fan={ac.state.fan_speed}")
@@ -160,16 +174,16 @@ def main() -> int:
     ac_in_dry = ac.state.mode == MIDEA_DRY_MODE and ac.state.running
     action_taken = "no action"
 
-    if humidity > HUMIDITY_TRIGGER and saved is None:
+    if humidity > effective_trigger and saved is None:
         snapshot = current_snapshot(ac)
         save_state(snapshot)
-        print(f"Humidity above {HUMIDITY_TRIGGER}% — saving state {snapshot} "
+        print(f"Humidity above {effective_trigger}% — saving state {snapshot} "
               f"and switching to dry mode.")
         ac.set_state(mode=MIDEA_DRY_MODE, running=True, cloud=cloud)
         action_taken = "turned ON (switched to dry mode)"
 
-    elif humidity > HUMIDITY_TRIGGER and saved is not None and not ac_in_dry:
-        print(f"Humidity still above {HUMIDITY_TRIGGER}% and an override is "
+    elif humidity > effective_trigger and saved is not None and not ac_in_dry:
+        print(f"Humidity still above {effective_trigger}% and an override is "
               f"recorded, but the AC isn't actually in dry mode (mode="
               f"{ac.state.mode} running={ac.state.running}) — something else "
               f"must have changed it. Re-asserting dry mode without touching "
@@ -177,8 +191,8 @@ def main() -> int:
         ac.set_state(mode=MIDEA_DRY_MODE, running=True, cloud=cloud)
         action_taken = "turned ON (re-asserted dry mode)"
 
-    elif humidity < HUMIDITY_RESET and saved is not None:
-        print(f"Humidity below {HUMIDITY_RESET}% — restoring saved state {saved}.")
+    elif humidity < effective_reset and saved is not None:
+        print(f"Humidity below {effective_reset}% — restoring saved state {saved}.")
         ac.set_state(
             mode=saved["mode"],
             running=saved["running"],
@@ -207,6 +221,8 @@ def main() -> int:
             f.write(f"target_f={target_f:.1f}\n")
             f.write(f"fan={ac.state.fan_speed}\n")
             f.write(f"govee_temp_f={govee_temp_f:.1f}\n")
+            f.write(f"trigger={effective_trigger}\n")
+            f.write(f"reset={effective_reset}\n")
             f.write(f"action={action_taken}\n")
 
     return 0
