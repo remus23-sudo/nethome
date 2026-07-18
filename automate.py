@@ -203,8 +203,10 @@ def main() -> int:
             cloud=cloud,
         )
         clear_state()
+        restored_mode_name = MIDEA_MODE_NAMES.get(saved["mode"], "Unknown")
         action_taken = (
-            "restored to ON" if saved["running"] else "turned OFF (restored)"
+            f"restored to ON ({restored_mode_name})" if saved["running"]
+            else f"turned OFF (restored, was {restored_mode_name})"
         )
 
     else:
