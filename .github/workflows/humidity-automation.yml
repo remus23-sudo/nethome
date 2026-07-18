@@ -47,6 +47,7 @@ jobs:
           body: |
             Humidity: ${{ steps.run.outputs.humidity }}%
             Action: ${{ steps.run.outputs.action }}
+            Thresholds used: trigger=${{ steps.run.outputs.trigger }}% reset=${{ steps.run.outputs.reset }}%
 
             AC state:
               mode: ${{ steps.run.outputs.mode }} (${{ steps.run.outputs.mode_name }})
