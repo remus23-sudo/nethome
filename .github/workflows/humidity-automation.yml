@@ -49,10 +49,10 @@ jobs:
             Action: ${{ steps.run.outputs.action }}
 
             AC state:
-              mode: ${{ steps.run.outputs.mode }}
+              mode: ${{ steps.run.outputs.mode }} (${{ steps.run.outputs.mode_name }})
               running: ${{ steps.run.outputs.running }}
               current indoor temp (Govee): ${{ steps.run.outputs.govee_temp_f }}°F
-              target temperature: ${{ steps.run.outputs.target }}
+              target temperature: ${{ steps.run.outputs.target }} (${{ steps.run.outputs.target_f }}F)
               fan speed: ${{ steps.run.outputs.fan }}
 
       - name: Commit state.json if it changed
