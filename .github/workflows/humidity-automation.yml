@@ -31,6 +31,7 @@ jobs:
           MIDEA_PASSWORD: ${{ secrets.MIDEA_PASSWORD }}
           HUMIDITY_TRIGGER: ${{ vars.HUMIDITY_TRIGGER }}
           HUMIDITY_RESET: ${{ vars.HUMIDITY_RESET }}
+          MAX_TEMP_ALERT_F: ${{ vars.MAX_TEMP_ALERT_F }}
         run: python automate.py
 
       - name: Email status
