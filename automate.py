@@ -195,19 +195,27 @@ def main() -> int:
 
     elif humidity < effective_reset and saved is not None:
         print(f"Humidity below {effective_reset}% — restoring saved state {saved}.")
-        ac.set_state(
-            mode=saved["mode"],
-            running=saved["running"],
-            target_temperature=saved["target_temperature"],
-            fan_speed=saved["fan_speed"],
-            cloud=cloud,
-        )
+        if saved["mode"] == MIDEA_DRY_MODE:
+            print("Saved state was itself Dry mode — turning off instead of "
+                  "restoring Dry mode.")
+            ac.set_state(running=False, cloud=cloud)
+        else:
+            ac.set_state(
+                mode=saved["mode"],
+                running=saved["running"],
+                target_temperature=saved["target_temperature"],
+                fan_speed=saved["fan_speed"],
+                cloud=cloud,
+            )
         clear_state()
         restored_mode_name = MIDEA_MODE_NAMES.get(saved["mode"], "Unknown")
-        action_taken = (
-            f"restored to ON ({restored_mode_name})" if saved["running"]
-            else f"turned OFF (restored, was {restored_mode_name})"
-        )
+        if saved["mode"] == MIDEA_DRY_MODE:
+            action_taken = "turned OFF (saved state was Dry mode)"
+        else:
+            action_taken = (
+                f"restored to ON ({restored_mode_name})" if saved["running"]
+                else f"turned OFF (restored, was {restored_mode_name})"
+            )
 
     else:
         print("No action needed this run.")
