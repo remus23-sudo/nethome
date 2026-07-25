@@ -24,7 +24,6 @@ Requires env vars:
 import json
 import os
 import sys
-import time
 import uuid
 from pathlib import Path
 
@@ -231,6 +230,19 @@ def run_cycle(govee_key: str, midea_account: str, midea_password: str) -> None:
     else:
         print("No temperature-based action needed this run.")
 
+    # --- Independent comfort-off check: room is both cool and dry --------
+    comfort_off_action = "no action"
+    if govee_temp_f < DESIRED_ROOM_TEMP_F and humidity < effective_reset:
+        print(f"Room temp {govee_temp_f}F is below desired {DESIRED_ROOM_TEMP_F}F "
+              f"and humidity {humidity}% is below reset {effective_reset}% — "
+              f"turning AC off.")
+        ac.set_state(running=False, cloud=cloud)
+        if STATE_FILE.exists():
+            clear_state()
+        if TEMP_STATE_FILE.exists():
+            clear_temp_state()
+        comfort_off_action = "turned OFF (temp below desired and humidity below reset)"
+
     # --- Humidity-based Dry mode routine (runs second, skipped if the ------
     # --- temperature routine already took action this cycle) --------------
     saved = load_saved_state()
@@ -300,7 +312,7 @@ def run_cycle(govee_key: str, midea_account: str, midea_password: str) -> None:
             alert_sources.append(f"Govee sensor: {govee_temp_f:.1f}F")
         if ac_indoor_f > MAX_TEMP_ALERT_F:
             alert_sources.append(f"AC unit: {ac_indoor_f:.1f}F")
-        alert_message = "; ".join(alert_sources)
+        alert_message = "; ".join(alert_sources) if alert_sources else "none"
 
         with open(github_output, "a") as f:
             f.write(f"humidity={humidity}\n")
@@ -322,6 +334,8 @@ def run_cycle(govee_key: str, midea_account: str, midea_password: str) -> None:
             f.write(f"temp_action_occurred={'true' if temp_action_taken != 'no action' else 'false'}\n")
             f.write(f"desired_temp_f={DESIRED_ROOM_TEMP_F}\n")
             f.write(f"temp_reset_f={temp_reset_f}\n")
+            f.write(f"comfort_off_action={comfort_off_action}\n")
+            f.write(f"comfort_off_occurred={'true' if comfort_off_action != 'no action' else 'false'}\n")
 
 
 def main() -> int:
@@ -334,15 +348,7 @@ def main() -> int:
               "(GOVEE_API_KEY, MIDEA_ACCOUNT, MIDEA_PASSWORD).")
         return 1
 
-    print("=== Cycle 1 ===")
     run_cycle(govee_key, midea_account, midea_password)
-
-    print("Pausing 10 minutes before running a second check this run...")
-    time.sleep(600)
-
-    print("=== Cycle 2 ===")
-    run_cycle(govee_key, midea_account, midea_password)
-
     return 0
 
 
