@@ -23,8 +23,11 @@ jobs:
           pip install -r requirements.txt
           pip install requests
 
-      - name: Run automation
-        id: run
+      # ------------------------------------------------------------------
+      # Cycle 1
+      # ------------------------------------------------------------------
+      - name: Run automation (cycle 1)
+        id: run1
         env:
           GOVEE_API_KEY: ${{ secrets.GOVEE_API_KEY }}
           MIDEA_ACCOUNT: ${{ secrets.MIDEA_ACCOUNT }}
@@ -35,68 +38,119 @@ jobs:
           DESIRED_ROOM_TEMP_F: ${{ vars.DESIRED_ROOM_TEMP_F }}
         run: python automate.py
 
-      - name: Email status
+      - name: Email status (cycle 1 - pausing 10 min)
         if: >-
-          always() && steps.run.outputs.humidity != '' &&
+          always() && steps.run1.outputs.humidity != '' &&
           (vars.EMAIL_NOTIFICATIONS == 'All' ||
            (vars.EMAIL_NOTIFICATIONS == 'Action' &&
-            (steps.run.outputs.action_occurred == 'true' || steps.run.outputs.temp_action_occurred == 'true')))
+            (steps.run1.outputs.action_occurred == 'true' || steps.run1.outputs.temp_action_occurred == 'true' || steps.run1.outputs.comfort_off_occurred == 'true')) ||
+           steps.run1.outputs.high_temp_alert == 'true')
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
           server_port: 465
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "AC automation: ${{ steps.run.outputs.action }} (${{ steps.run.outputs.humidity }}%)"
+          subject: "${{ steps.run1.outputs.high_temp_alert == 'true' && '⚠️ HIGH TEMP — ' || '' }}AC automation (cycle 1, pausing 10 min): ${{ steps.run1.outputs.action }} (${{ steps.run1.outputs.humidity }}%)"
           to: ${{ secrets.MAIL_USERNAME }}
           from: NetHome Automation
           body: |
-            Humidity: ${{ steps.run.outputs.humidity }}%
-            Action (humidity/dry mode): ${{ steps.run.outputs.action }}
-            Thresholds used: trigger=${{ steps.run.outputs.trigger }}% reset=${{ steps.run.outputs.reset }}%
+            Cycle 1 of 2 complete — pausing 10 minutes before the second check.
 
-            Action (temp/auto mode): ${{ steps.run.outputs.temp_action }}
-            Desired room temp: ${{ steps.run.outputs.desired_temp_f }}°F (restores below ${{ steps.run.outputs.temp_reset_f }}°F)
+            High-temp alert: ${{ steps.run1.outputs.alert_message }} (limit ${{ vars.MAX_TEMP_ALERT_F }}°F)
 
-            AC state:
-              mode: ${{ steps.run.outputs.mode }} (${{ steps.run.outputs.mode_name }})
-              running: ${{ steps.run.outputs.running }}
-              current indoor temp (Govee): ${{ steps.run.outputs.govee_temp_f }}°F
-              current indoor temp (AC unit): ${{ steps.run.outputs.ac_indoor_f }}°F
-              target temperature: ${{ steps.run.outputs.target }} (${{ steps.run.outputs.target_f }}F)
-              fan speed: ${{ steps.run.outputs.fan }}
+            Humidity: ${{ steps.run1.outputs.humidity }}%
+            Action (humidity/dry mode): ${{ steps.run1.outputs.action }}
+            Thresholds used: trigger=${{ steps.run1.outputs.trigger }}% reset=${{ steps.run1.outputs.reset }}%
 
-      - name: High temperature alert email
-        if: always() && steps.run.outputs.high_temp_alert == 'true'
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          username: ${{ secrets.MAIL_USERNAME }}
-          password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "⚠️ AC automation: HIGH TEMPERATURE ALERT (${{ steps.run.outputs.alert_message }})"
-          to: ${{ secrets.MAIL_USERNAME }}
-          from: NetHome Automation
-          body: |
-            Room temperature exceeded ${{ vars.MAX_TEMP_ALERT_F }}°F.
+            Action (temp/auto mode): ${{ steps.run1.outputs.temp_action }}
+            Desired room temp: ${{ steps.run1.outputs.desired_temp_f }}°F (restores below ${{ steps.run1.outputs.temp_reset_f }}°F)
 
-            Triggered by: ${{ steps.run.outputs.alert_message }}
-
-            Govee sensor: ${{ steps.run.outputs.govee_temp_f }}°F
-            AC unit sensor: ${{ steps.run.outputs.ac_indoor_f }}°F
+            Action (comfort off - cool & dry): ${{ steps.run1.outputs.comfort_off_action }}
 
             AC state:
-              mode: ${{ steps.run.outputs.mode }} (${{ steps.run.outputs.mode_name }})
-              running: ${{ steps.run.outputs.running }}
-              target temperature: ${{ steps.run.outputs.target }} (${{ steps.run.outputs.target_f }}F)
+              mode: ${{ steps.run1.outputs.mode }} (${{ steps.run1.outputs.mode_name }})
+              running: ${{ steps.run1.outputs.running }}
+              current indoor temp (Govee): ${{ steps.run1.outputs.govee_temp_f }}°F
+              current indoor temp (AC unit): ${{ steps.run1.outputs.ac_indoor_f }}°F
+              target temperature: ${{ steps.run1.outputs.target }} (${{ steps.run1.outputs.target_f }}F)
+              fan speed: ${{ steps.run1.outputs.fan }}
 
-      - name: Commit state.json if it changed
+      - name: Commit state after cycle 1
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           if [ -n "$(git status --porcelain)" ]; then
             git add -A state.json temp_state.json
-            git commit -m "Update saved AC state [skip ci]"
+            git commit -m "Update saved AC state (cycle 1) [skip ci]"
+            git push
+          else
+            echo "No change to state.json"
+          fi
+
+      - name: Pause 10 minutes before second check
+        run: sleep 600
+
+      # ------------------------------------------------------------------
+      # Cycle 2
+      # ------------------------------------------------------------------
+      - name: Run automation (cycle 2)
+        id: run2
+        env:
+          GOVEE_API_KEY: ${{ secrets.GOVEE_API_KEY }}
+          MIDEA_ACCOUNT: ${{ secrets.MIDEA_ACCOUNT }}
+          MIDEA_PASSWORD: ${{ secrets.MIDEA_PASSWORD }}
+          HUMIDITY_TRIGGER: ${{ vars.HUMIDITY_TRIGGER }}
+          HUMIDITY_RESET: ${{ vars.HUMIDITY_RESET }}
+          MAX_TEMP_ALERT_F: ${{ vars.MAX_TEMP_ALERT_F }}
+          DESIRED_ROOM_TEMP_F: ${{ vars.DESIRED_ROOM_TEMP_F }}
+        run: python automate.py
+
+      - name: Email status (cycle 2 - completion)
+        if: >-
+          always() && steps.run2.outputs.humidity != '' &&
+          (vars.EMAIL_NOTIFICATIONS == 'All' ||
+           (vars.EMAIL_NOTIFICATIONS == 'Action' &&
+            (steps.run2.outputs.action_occurred == 'true' || steps.run2.outputs.temp_action_occurred == 'true' || steps.run2.outputs.comfort_off_occurred == 'true')) ||
+           steps.run2.outputs.high_temp_alert == 'true')
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "${{ steps.run2.outputs.high_temp_alert == 'true' && '⚠️ HIGH TEMP — ' || '' }}AC automation (cycle 2, complete): ${{ steps.run2.outputs.action }} (${{ steps.run2.outputs.humidity }}%)"
+          to: ${{ secrets.MAIL_USERNAME }}
+          from: NetHome Automation
+          body: |
+            Cycle 2 of 2 complete — this workflow run is finished.
+
+            High-temp alert: ${{ steps.run2.outputs.alert_message }} (limit ${{ vars.MAX_TEMP_ALERT_F }}°F)
+
+            Humidity: ${{ steps.run2.outputs.humidity }}%
+            Action (humidity/dry mode): ${{ steps.run2.outputs.action }}
+            Thresholds used: trigger=${{ steps.run2.outputs.trigger }}% reset=${{ steps.run2.outputs.reset }}%
+
+            Action (temp/auto mode): ${{ steps.run2.outputs.temp_action }}
+            Desired room temp: ${{ steps.run2.outputs.desired_temp_f }}°F (restores below ${{ steps.run2.outputs.temp_reset_f }}°F)
+
+            Action (comfort off - cool & dry): ${{ steps.run2.outputs.comfort_off_action }}
+
+            AC state:
+              mode: ${{ steps.run2.outputs.mode }} (${{ steps.run2.outputs.mode_name }})
+              running: ${{ steps.run2.outputs.running }}
+              current indoor temp (Govee): ${{ steps.run2.outputs.govee_temp_f }}°F
+              current indoor temp (AC unit): ${{ steps.run2.outputs.ac_indoor_f }}°F
+              target temperature: ${{ steps.run2.outputs.target }} (${{ steps.run2.outputs.target_f }}F)
+              fan speed: ${{ steps.run2.outputs.fan }}
+
+      - name: Commit state after cycle 2
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if [ -n "$(git status --porcelain)" ]; then
+            git add -A state.json temp_state.json
+            git commit -m "Update saved AC state (cycle 2) [skip ci]"
             git push
           else
             echo "No change to state.json"
