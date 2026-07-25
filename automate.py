@@ -24,6 +24,7 @@ Requires env vars:
 import json
 import os
 import sys
+import time
 import uuid
 from pathlib import Path
 
@@ -46,6 +47,7 @@ GOVEE_DEVICE = "A0:38:E6:E9:C0:46:12:59"
 GOVEE_BASE_URL = "https://openapi.api.govee.com/router/api/v1"
 
 MIDEA_DRY_MODE = 3
+MIDEA_AUTO_MODE = 1
 
 MIDEA_MODE_NAMES = {
     1: "Auto",
@@ -55,7 +57,11 @@ MIDEA_MODE_NAMES = {
     5: "Fan",
 }
 
+DESIRED_ROOM_TEMP_F = float(os.environ.get("DESIRED_ROOM_TEMP_F") or "78")
+TEMP_RESET_OFFSET_F = 2.0
+
 STATE_FILE = Path("state.json")
+TEMP_STATE_FILE = Path("temp_state.json")
 
 
 # --- Govee sensor readings ------------------------------------------------
@@ -142,21 +148,26 @@ def clear_state() -> None:
         STATE_FILE.unlink()
 
 
+def load_temp_saved_state():
+    if TEMP_STATE_FILE.exists():
+        return json.loads(TEMP_STATE_FILE.read_text())
+    return None
+
+
+def save_temp_state(snapshot: dict) -> None:
+    TEMP_STATE_FILE.write_text(json.dumps(snapshot, indent=2))
+
+
+def clear_temp_state() -> None:
+    if TEMP_STATE_FILE.exists():
+        TEMP_STATE_FILE.unlink()
+
+
 # --- Main -----------------------------------------------------------------
 
-def main() -> int:
-    govee_key = os.environ.get("GOVEE_API_KEY")
-    midea_account = os.environ.get("MIDEA_ACCOUNT")
-    midea_password = os.environ.get("MIDEA_PASSWORD")
-
-    if not all([govee_key, midea_account, midea_password]):
-        print("Missing one or more required env vars "
-              "(GOVEE_API_KEY, MIDEA_ACCOUNT, MIDEA_PASSWORD).")
-        return 1
-
+def run_cycle(govee_key: str, midea_account: str, midea_password: str) -> None:
     humidity, govee_temp_f = get_govee_reading(govee_key)
     cloud, ac = get_ac(midea_account, midea_password)
-    saved = load_saved_state()
 
     if govee_temp_f < COLD_ROOM_TEMP_F:
         effective_trigger = COLD_ROOM_TRIGGER
@@ -171,12 +182,69 @@ def main() -> int:
     print(f"Humidity: {humidity}%")
     print(f"AC state: mode={ac.state.mode} running={ac.state.running} "
           f"target={ac.state.target_temperature} fan={ac.state.fan_speed}")
+
+    # --- Independent temperature-based Auto mode routine (runs first) ----
+    temp_saved = load_temp_saved_state()
+    ac_in_auto = ac.state.mode == MIDEA_AUTO_MODE and ac.state.running
+    temp_reset_f = DESIRED_ROOM_TEMP_F - TEMP_RESET_OFFSET_F
+    temp_action_taken = "no action"
+
+    if govee_temp_f >= DESIRED_ROOM_TEMP_F and temp_saved is None:
+        temp_snapshot = current_snapshot(ac)
+        save_temp_state(temp_snapshot)
+        print(f"Room temp {govee_temp_f}F >= desired {DESIRED_ROOM_TEMP_F}F — "
+              f"saving state {temp_snapshot} and switching to Auto mode.")
+        ac.set_state(mode=MIDEA_AUTO_MODE, running=True, cloud=cloud)
+        temp_action_taken = "turned ON (switched to Auto mode)"
+
+    elif govee_temp_f >= DESIRED_ROOM_TEMP_F and temp_saved is not None and not ac_in_auto:
+        print(f"Room temp still >= desired {DESIRED_ROOM_TEMP_F}F and an "
+              f"override is recorded, but the AC isn't actually in Auto mode "
+              f"(mode={ac.state.mode} running={ac.state.running}) — "
+              f"re-asserting Auto mode without touching the saved state.")
+        ac.set_state(mode=MIDEA_AUTO_MODE, running=True, cloud=cloud)
+        temp_action_taken = "turned ON (re-asserted Auto mode)"
+
+    elif govee_temp_f < temp_reset_f and temp_saved is not None:
+        print(f"Room temp below {temp_reset_f}F — restoring saved state "
+              f"{temp_saved}.")
+        if temp_saved["mode"] == MIDEA_AUTO_MODE:
+            print("Saved state was itself Auto mode — turning off instead "
+                  "of restoring Auto mode.")
+            ac.set_state(running=False, cloud=cloud)
+            temp_action_taken = "turned OFF (saved state was Auto mode)"
+        else:
+            ac.set_state(
+                mode=temp_saved["mode"],
+                running=temp_saved["running"],
+                target_temperature=temp_saved["target_temperature"],
+                fan_speed=temp_saved["fan_speed"],
+                cloud=cloud,
+            )
+            restored_mode_name = MIDEA_MODE_NAMES.get(temp_saved["mode"], "Unknown")
+            temp_action_taken = (
+                f"restored to ON ({restored_mode_name})" if temp_saved["running"]
+                else f"turned OFF (restored, was {restored_mode_name})"
+            )
+        clear_temp_state()
+
+    else:
+        print("No temperature-based action needed this run.")
+
+    # --- Humidity-based Dry mode routine (runs second, skipped if the ------
+    # --- temperature routine already took action this cycle) --------------
+    saved = load_saved_state()
     print(f"Saved override state present: {saved is not None}")
 
     ac_in_dry = ac.state.mode == MIDEA_DRY_MODE and ac.state.running
     action_taken = "no action"
 
-    if humidity > effective_trigger and saved is None:
+    if temp_action_taken != "no action":
+        print(f"Temperature routine already took action this cycle "
+              f"({temp_action_taken}) — skipping humidity routine.")
+        action_taken = "skipped (temperature routine acted this cycle)"
+
+    elif humidity > effective_trigger and saved is None:
         snapshot = current_snapshot(ac)
         save_state(snapshot)
         print(f"Humidity above {effective_trigger}% — saving state {snapshot} "
@@ -250,6 +318,30 @@ def main() -> int:
             f.write(f"action_occurred={'true' if action_taken != 'no action' else 'false'}\n")
             f.write(f"high_temp_alert={'true' if high_temp_alert else 'false'}\n")
             f.write(f"alert_message={alert_message}\n")
+            f.write(f"temp_action={temp_action_taken}\n")
+            f.write(f"temp_action_occurred={'true' if temp_action_taken != 'no action' else 'false'}\n")
+            f.write(f"desired_temp_f={DESIRED_ROOM_TEMP_F}\n")
+            f.write(f"temp_reset_f={temp_reset_f}\n")
+
+
+def main() -> int:
+    govee_key = os.environ.get("GOVEE_API_KEY")
+    midea_account = os.environ.get("MIDEA_ACCOUNT")
+    midea_password = os.environ.get("MIDEA_PASSWORD")
+
+    if not all([govee_key, midea_account, midea_password]):
+        print("Missing one or more required env vars "
+              "(GOVEE_API_KEY, MIDEA_ACCOUNT, MIDEA_PASSWORD).")
+        return 1
+
+    print("=== Cycle 1 ===")
+    run_cycle(govee_key, midea_account, midea_password)
+
+    print("Pausing 10 minutes before running a second check this run...")
+    time.sleep(600)
+
+    print("=== Cycle 2 ===")
+    run_cycle(govee_key, midea_account, midea_password)
 
     return 0
 
