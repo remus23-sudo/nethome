@@ -32,13 +32,15 @@ jobs:
           HUMIDITY_TRIGGER: ${{ vars.HUMIDITY_TRIGGER }}
           HUMIDITY_RESET: ${{ vars.HUMIDITY_RESET }}
           MAX_TEMP_ALERT_F: ${{ vars.MAX_TEMP_ALERT_F }}
+          DESIRED_ROOM_TEMP_F: ${{ vars.DESIRED_ROOM_TEMP_F }}
         run: python automate.py
 
       - name: Email status
         if: >-
           always() && steps.run.outputs.humidity != '' &&
           (vars.EMAIL_NOTIFICATIONS == 'All' ||
-           (vars.EMAIL_NOTIFICATIONS == 'Action' && steps.run.outputs.action_occurred == 'true'))
+           (vars.EMAIL_NOTIFICATIONS == 'Action' &&
+            (steps.run.outputs.action_occurred == 'true' || steps.run.outputs.temp_action_occurred == 'true')))
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
@@ -50,8 +52,11 @@ jobs:
           from: NetHome Automation
           body: |
             Humidity: ${{ steps.run.outputs.humidity }}%
-            Action: ${{ steps.run.outputs.action }}
+            Action (humidity/dry mode): ${{ steps.run.outputs.action }}
             Thresholds used: trigger=${{ steps.run.outputs.trigger }}% reset=${{ steps.run.outputs.reset }}%
+
+            Action (temp/auto mode): ${{ steps.run.outputs.temp_action }}
+            Desired room temp: ${{ steps.run.outputs.desired_temp_f }}°F (restores below ${{ steps.run.outputs.temp_reset_f }}°F)
 
             AC state:
               mode: ${{ steps.run.outputs.mode }} (${{ steps.run.outputs.mode_name }})
@@ -90,7 +95,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           if [ -n "$(git status --porcelain)" ]; then
-            git add -A state.json
+            git add -A state.json temp_state.json
             git commit -m "Update saved AC state [skip ci]"
             git push
           else
