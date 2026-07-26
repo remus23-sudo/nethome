@@ -78,6 +78,7 @@ Set these under: repo **Settings → Secrets and variables → Actions → Varia
 | `MAINTENANCE_START` | Start of the daily maintenance window, Pacific Time, 24-hour format. Leave both this and `MAINTENANCE_END` unset to disable the window entirely. | `22:00` | none (disabled) |
 | `MAINTENANCE_END` | End of the daily maintenance window, Pacific Time, 24-hour format. Can be earlier than `MAINTENANCE_START` (e.g. `22:00`–`06:00`) to span midnight. | `06:00` | none (disabled) |
 | `EMAIL_NOTIFICATIONS` | Controls the regular status email (the high-temp alert and maintenance-skip notice have their own rules, noted above/below). One of: `All` — email on every run, action or not, and also sends the maintenance-skip notice; `Action` — email only on cycles where the AC was actually switched; `None` — no regular status emails (or leave unset / any other value). | `Action` | none |
+| `START_DELAY_SECONDS` | One-time delay (in seconds) before cycle 1 runs, applied once at the very start of each triggered run — not repeated before cycles 2 or 3. Leave unset or `0` to disable. | `60` | none (disabled) |
 
 ## Notes / known limitations
 
