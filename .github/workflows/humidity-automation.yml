@@ -24,7 +24,7 @@ jobs:
           pip install requests
 
       # ------------------------------------------------------------------
-      # Cycle 1
+      # Cycle 1 (give Auto mode priority)
       # ------------------------------------------------------------------
       - name: Run automation (cycle 1)
         id: run1
@@ -56,7 +56,7 @@ jobs:
           to: ${{ secrets.MAIL_USERNAME }}
           from: NetHome Automation
           body: |
-            Cycle 1 of 2 complete — pausing 10 minutes before the second check.
+            Cycle 1 of 3 complete — pausing 10 minutes before the second check.
 
             High-temp alert: ${{ steps.run1.outputs.alert_message }} (limit ${{ vars.MAX_TEMP_ALERT_F }}°F)
 
@@ -90,7 +90,7 @@ jobs:
         run: sleep 600
 
       # ------------------------------------------------------------------
-      # Cycle 2
+      # Cycle 2 (give Auto mode priority — duplicate of cycle 1)
       # ------------------------------------------------------------------
       - name: Run automation (cycle 2)
         id: run2
@@ -103,10 +103,10 @@ jobs:
           DESIRED_ROOM_TEMP_F: ${{ vars.DESIRED_ROOM_TEMP_F }}
           MAINTENANCE_START: ${{ vars.MAINTENANCE_START }}
           MAINTENANCE_END: ${{ vars.MAINTENANCE_END }}
-          GIVE_AUTO_PRIORITY: "false"
+          GIVE_AUTO_PRIORITY: "true"
         run: python automate.py
 
-      - name: Email status (cycle 2 - completion)
+      - name: Email status (cycle 2 - pausing 10 min)
         if: >-
           always() && steps.run2.outputs.humidity != '' &&
           (vars.EMAIL_NOTIFICATIONS == 'All' ||
@@ -118,11 +118,11 @@ jobs:
           server_port: 465
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "${{ steps.run2.outputs.high_temp_alert == 'true' && '⚠️ HIGH TEMP — ' || '' }}AC automation (cycle 2, complete): ${{ steps.run2.outputs.action }} (${{ steps.run2.outputs.humidity }}%)"
+          subject: "${{ steps.run2.outputs.high_temp_alert == 'true' && '⚠️ HIGH TEMP — ' || '' }}AC automation (cycle 2, pausing 10 min): ${{ steps.run2.outputs.action }} (${{ steps.run2.outputs.humidity }}%)"
           to: ${{ secrets.MAIL_USERNAME }}
           from: NetHome Automation
           body: |
-            Cycle 2 of 2 complete — this workflow run is finished.
+            Cycle 2 of 3 complete — pausing 10 minutes before the third check.
 
             High-temp alert: ${{ steps.run2.outputs.alert_message }} (limit ${{ vars.MAX_TEMP_ALERT_F }}°F)
 
@@ -150,4 +150,70 @@ jobs:
           from: NetHome Automation
           body: |
             Cycle 2 skipped entirely — current time is inside the maintenance
+            window (${{ vars.MAINTENANCE_START }} - ${{ vars.MAINTENANCE_END }} Pacific Time).
+
+      - name: Pause 10 minutes before third check
+        run: sleep 600
+
+      # ------------------------------------------------------------------
+      # Cycle 3 (humidity always wins outright)
+      # ------------------------------------------------------------------
+      - name: Run automation (cycle 3)
+        id: run3
+        env:
+          GOVEE_API_KEY: ${{ secrets.GOVEE_API_KEY }}
+          MIDEA_ACCOUNT: ${{ secrets.MIDEA_ACCOUNT }}
+          MIDEA_PASSWORD: ${{ secrets.MIDEA_PASSWORD }}
+          HUMIDITY_TRIGGER: ${{ vars.HUMIDITY_TRIGGER }}
+          MAX_TEMP_ALERT_F: ${{ vars.MAX_TEMP_ALERT_F }}
+          DESIRED_ROOM_TEMP_F: ${{ vars.DESIRED_ROOM_TEMP_F }}
+          MAINTENANCE_START: ${{ vars.MAINTENANCE_START }}
+          MAINTENANCE_END: ${{ vars.MAINTENANCE_END }}
+          GIVE_AUTO_PRIORITY: "false"
+        run: python automate.py
+
+      - name: Email status (cycle 3 - completion)
+        if: >-
+          always() && steps.run3.outputs.humidity != '' &&
+          (vars.EMAIL_NOTIFICATIONS == 'All' ||
+           (vars.EMAIL_NOTIFICATIONS == 'Action' && steps.run3.outputs.action_occurred == 'true') ||
+           steps.run3.outputs.high_temp_alert == 'true')
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "${{ steps.run3.outputs.high_temp_alert == 'true' && '⚠️ HIGH TEMP — ' || '' }}AC automation (cycle 3, complete): ${{ steps.run3.outputs.action }} (${{ steps.run3.outputs.humidity }}%)"
+          to: ${{ secrets.MAIL_USERNAME }}
+          from: NetHome Automation
+          body: |
+            Cycle 3 of 3 complete — this workflow run is finished.
+
+            High-temp alert: ${{ steps.run3.outputs.alert_message }} (limit ${{ vars.MAX_TEMP_ALERT_F }}°F)
+
+            Humidity: ${{ steps.run3.outputs.humidity }}% (trigger: ${{ steps.run3.outputs.humidity_trigger }}%)
+            Govee temp: ${{ steps.run3.outputs.govee_temp_f }}°F (desired: ${{ steps.run3.outputs.desired_temp_f }}°F)
+            Action: ${{ steps.run3.outputs.action }}
+
+            AC state:
+              mode: ${{ steps.run3.outputs.mode }} (${{ steps.run3.outputs.mode_name }})
+              running: ${{ steps.run3.outputs.running }}
+              current indoor temp (AC unit): ${{ steps.run3.outputs.ac_indoor_f }}°F
+              target temperature: ${{ steps.run3.outputs.target }} (${{ steps.run3.outputs.target_f }}F)
+              fan speed: ${{ steps.run3.outputs.fan }}
+
+      - name: Maintenance window skip email (cycle 3)
+        if: always() && steps.run3.outputs.maintenance_skipped == 'true' && vars.EMAIL_NOTIFICATIONS == 'All'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "AC automation (cycle 3): skipped — inside maintenance window"
+          to: ${{ secrets.MAIL_USERNAME }}
+          from: NetHome Automation
+          body: |
+            Cycle 3 skipped entirely — current time is inside the maintenance
             window (${{ vars.MAINTENANCE_START }} - ${{ vars.MAINTENANCE_END }} Pacific Time).
