@@ -19,6 +19,8 @@ there's nothing to preserve across a humidity intervention.
 
 Requires env vars:
   GOVEE_API_KEY      - Govee Developer API key
+  GOVEE_SKU          - Govee device SKU (e.g. "H5103")
+  GOVEE_DEVICE       - Govee device MAC address
   MIDEA_ACCOUNT      - NetHome Plus account email
   MIDEA_PASSWORD     - NetHome Plus account password
 
@@ -50,8 +52,8 @@ MAINTENANCE_START = os.environ.get("MAINTENANCE_START") or ""
 MAINTENANCE_END = os.environ.get("MAINTENANCE_END") or ""
 PACIFIC_TZ = ZoneInfo("America/Los_Angeles")
 
-GOVEE_SKU = "H5103"
-GOVEE_DEVICE = "A0:38:E6:E9:C0:46:12:59"
+GOVEE_SKU = os.environ.get("GOVEE_SKU") or ""
+GOVEE_DEVICE = os.environ.get("GOVEE_DEVICE") or ""
 GOVEE_BASE_URL = "https://openapi.api.govee.com/router/api/v1"
 
 MIDEA_DRY_MODE = 3
@@ -296,9 +298,9 @@ def main() -> int:
     midea_account = os.environ.get("MIDEA_ACCOUNT")
     midea_password = os.environ.get("MIDEA_PASSWORD")
 
-    if not all([govee_key, midea_account, midea_password]):
+    if not all([govee_key, midea_account, midea_password, GOVEE_SKU, GOVEE_DEVICE]):
         print("Missing one or more required env vars "
-              "(GOVEE_API_KEY, MIDEA_ACCOUNT, MIDEA_PASSWORD).")
+              "(GOVEE_API_KEY, MIDEA_ACCOUNT, MIDEA_PASSWORD, GOVEE_SKU, GOVEE_DEVICE).")
         return 1
 
     give_auto_priority = (os.environ.get("GIVE_AUTO_PRIORITY") or "true").lower() == "true"
