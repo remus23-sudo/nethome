@@ -81,7 +81,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           if [ -n "$(git status --porcelain)" ]; then
-            git add -A state.json temp_state.json
+            git add -A
             git commit -m "Update saved AC state (cycle 1) [skip ci]"
             git push
           else
@@ -149,7 +149,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           if [ -n "$(git status --porcelain)" ]; then
-            git add -A state.json temp_state.json
+            git add -A
             git commit -m "Update saved AC state (cycle 2) [skip ci]"
             git push
           else
