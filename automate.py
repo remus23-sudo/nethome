@@ -34,6 +34,7 @@ Optional env vars (defaults shown):
 
 import os
 import sys
+import time
 import uuid
 from datetime import datetime
 from datetime import time as dtime
@@ -41,6 +42,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 from midea_beautiful import appliance_state, connect_to_cloud, find_appliances
+from midea_beautiful.exceptions import CloudRequestError
 
 # --- Config -----------------------------------------------------------
 
@@ -116,28 +118,43 @@ def get_govee_reading(api_key: str) -> tuple[float, float]:
 
 # --- Midea AC -------------------------------------------------------------
 
-def get_ac(account: str, password: str):
-    cloud = connect_to_cloud(account=account, password=password)
-    appliances = find_appliances(account=account, password=password)
-    ac = next((a for a in appliances if getattr(a, "type", None) == "0xAC"), None)
-    if ac is None:
-        raise RuntimeError("No air conditioner appliance found on this account.")
+def get_ac(account: str, password: str, max_attempts: int = 3, retry_delay: float = 10.0):
+    last_error = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            cloud = connect_to_cloud(account=account, password=password)
+            appliances = find_appliances(account=account, password=password)
+            ac = next(
+                (a for a in appliances if getattr(a, "type", None) == "0xAC"), None
+            )
+            if ac is None:
+                raise RuntimeError("No air conditioner appliance found on this account.")
 
-    appliance_id = (
-        getattr(ac, "id", None)
-        or getattr(ac.state, "id", None)
-        or getattr(ac.state, "_id", None)
-    )
-    if appliance_id is None:
-        raise RuntimeError("Could not determine appliance id for the AC.")
+            appliance_id = (
+                getattr(ac, "id", None)
+                or getattr(ac.state, "id", None)
+                or getattr(ac.state, "_id", None)
+            )
+            if appliance_id is None:
+                raise RuntimeError("Could not determine appliance id for the AC.")
 
-    refreshed = appliance_state(
-        cloud=cloud,
-        use_cloud=True,
-        appliance_id=appliance_id,
-        appliance_type="0xAC",
-    )
-    return cloud, refreshed
+            refreshed = appliance_state(
+                cloud=cloud,
+                use_cloud=True,
+                appliance_id=appliance_id,
+                appliance_type="0xAC",
+            )
+            return cloud, refreshed
+
+        except CloudRequestError as e:
+            last_error = e
+            print(f"Midea cloud request failed on attempt {attempt}/{max_attempts}: "
+                  f"{e!r}")
+            if attempt < max_attempts:
+                print(f"Retrying in {retry_delay:.0f} seconds...")
+                time.sleep(retry_delay)
+
+    raise last_error
 
 
 # --- Main -----------------------------------------------------------------
