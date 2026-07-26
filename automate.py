@@ -186,8 +186,9 @@ def run_cycle(govee_key: str, midea_account: str, midea_password: str,
 
     already_auto = ac.state.mode == MIDEA_AUTO_MODE and ac.state.running
     already_dry = ac.state.mode == MIDEA_DRY_MODE and ac.state.running
+    TEMP_TOLERANCE_F = 0.5
     too_humid = humidity > HUMIDITY_TRIGGER
-    too_hot = govee_temp_f > DESIRED_ROOM_TEMP_F
+    too_hot = govee_temp_f > DESIRED_ROOM_TEMP_F + TEMP_TOLERANCE_F
 
     if give_auto_priority:
         # Give Auto mode a chance to reduce humidity as a side effect of
