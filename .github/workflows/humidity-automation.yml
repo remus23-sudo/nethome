@@ -30,6 +30,8 @@ jobs:
         id: run1
         env:
           GOVEE_API_KEY: ${{ secrets.GOVEE_API_KEY }}
+          GOVEE_SKU: ${{ secrets.GOVEE_SKU }}
+          GOVEE_DEVICE: ${{ secrets.GOVEE_DEVICE }}
           MIDEA_ACCOUNT: ${{ secrets.MIDEA_ACCOUNT }}
           MIDEA_PASSWORD: ${{ secrets.MIDEA_PASSWORD }}
           HUMIDITY_TRIGGER: ${{ vars.HUMIDITY_TRIGGER }}
@@ -96,6 +98,8 @@ jobs:
         id: run2
         env:
           GOVEE_API_KEY: ${{ secrets.GOVEE_API_KEY }}
+          GOVEE_SKU: ${{ secrets.GOVEE_SKU }}
+          GOVEE_DEVICE: ${{ secrets.GOVEE_DEVICE }}
           MIDEA_ACCOUNT: ${{ secrets.MIDEA_ACCOUNT }}
           MIDEA_PASSWORD: ${{ secrets.MIDEA_PASSWORD }}
           HUMIDITY_TRIGGER: ${{ vars.HUMIDITY_TRIGGER }}
@@ -162,6 +166,8 @@ jobs:
         id: run3
         env:
           GOVEE_API_KEY: ${{ secrets.GOVEE_API_KEY }}
+          GOVEE_SKU: ${{ secrets.GOVEE_SKU }}
+          GOVEE_DEVICE: ${{ secrets.GOVEE_DEVICE }}
           MIDEA_ACCOUNT: ${{ secrets.MIDEA_ACCOUNT }}
           MIDEA_PASSWORD: ${{ secrets.MIDEA_PASSWORD }}
           HUMIDITY_TRIGGER: ${{ vars.HUMIDITY_TRIGGER }}
