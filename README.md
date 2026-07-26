@@ -17,7 +17,7 @@ Everything runs on **GitHub Actions** — no home server, Raspberry Pi, or alway
 |---|---|
 | `automate.py` | The main script. Reads humidity/temperature from Govee, reads and controls the AC via the Midea cloud, decides what action (if any) to take, and writes outputs used by the email steps. |
 | `requirements.txt` | Python dependencies (`midea-beautiful-air`, `tzdata`) for `automate.py`. |
-| `.github/workflows/humidity-automation.yml` | The GitHub Actions workflow. Runs `automate.py` three times per trigger (10 minutes apart each), emailing after each cycle. |
+| `.github/workflows/humidity-automation.yml` | The GitHub Actions workflow. Runs `automate.py` three times per trigger (10 minutes apart each), emailing after each cycle. This should be the only file inside `.github/workflows/` — GitHub sometimes auto-creates a `blank.yml` starter template, and copies of `diagnose.py`/`requirements.txt` or old `diagnose.yml`/`govee-diagnose.yml` workflows can end up there by accident; none of those belong in that folder. |
 | `diagnose.py` / `govee_diagnose.py` | One-off diagnostic scripts used while building this automation, to inspect the raw Midea and Govee API responses. Not part of the regular automation; safe to ignore or delete. |
 
 ## How the automation logic works
@@ -59,6 +59,8 @@ Set these under: repo **Settings → Secrets and variables → Actions → Secre
 | Secret | Description |
 |---|---|
 | `GOVEE_API_KEY` | Govee Developer API key. Get it in the Govee Home app: Settings → About Us → Apply for API Key. |
+| `GOVEE_SKU` | Your Govee sensor's model SKU (e.g. `H5103`). Found in the raw device list response from Govee's API, or via the model number on the device/app. |
+| `GOVEE_DEVICE` | Your Govee sensor's device MAC address, as returned by Govee's device list API. Identifies exactly which sensor to read. |
 | `MIDEA_ACCOUNT` | Your NetHome Plus account email. |
 | `MIDEA_PASSWORD` | Your NetHome Plus account password. |
 | `MAIL_USERNAME` | The Gmail address emails are sent from and to. |
@@ -81,6 +83,7 @@ Set these under: repo **Settings → Secrets and variables → Actions → Varia
 
 - The AC's own `indoor_temperature` reading has historically under-reported real room temperature (likely due to sensor placement near the internal coils) — the Govee reading is what the automation's decisions are based on for this reason.
 - Midea AC mode numbers, as far as confirmed on this specific unit: `1` = Auto, `2` = Cool, `3` = Dry, `4` = Heat, `5` = Fan. A mode value of `6` has been seen once and is not yet mapped/confirmed.
-- The maintenance window is checked fresh at the start of each of the two cycles (not once for the whole run), using Pacific Time via Python's `zoneinfo`, which automatically accounts for daylight saving — the same `MAINTENANCE_START`/`END` values mean "10pm local" year-round without any manual adjustment.
+- The maintenance window is checked fresh at the start of each of the three cycles (not once for the whole run), using Pacific Time via Python's `zoneinfo`, which automatically accounts for daylight saving — the same `MAINTENANCE_START`/`END` values mean "10pm local" year-round without any manual adjustment.
 - Total run time is now roughly 20+ minutes (three cycles with a 10-minute pause between each), so make sure whatever triggers this workflow (e.g. an external cron service) leaves enough room for one run to finish before the next starts, to avoid overlapping runs.
+- Nothing in `automate.py` or the workflow file is hardcoded — every credential and identifier (API keys, account email/password, and even the Govee device's SKU/MAC address) comes from GitHub Secrets, referenced by name. This matters if you're considering making the repo public: the *logic* becomes visible to anyone, but no actual credential or device-identifying value does.
 - Both the Midea and Govee cloud integrations were built by directly inspecting live API/library responses rather than trusting documentation, since the installed `midea-beautiful-air` library's actual behavior didn't match its own published docs in several places. If either the Midea or Govee library/API changes in the future and something stops working, re-running the diagnostic scripts (`diagnose.py`, `govee_diagnose.py`) is the fastest way to see what changed.
