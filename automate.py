@@ -57,7 +57,6 @@ MIDEA_MODE_NAMES = {
 }
 
 DESIRED_ROOM_TEMP_F = float(os.environ.get("DESIRED_ROOM_TEMP_F") or "78")
-TEMP_RESET_OFFSET_F = 2.0
 
 STATE_FILE = Path("state.json")
 TEMP_STATE_FILE = Path("temp_state.json")
@@ -185,23 +184,28 @@ def run_cycle(govee_key: str, midea_account: str, midea_password: str) -> None:
     # --- Independent temperature-based Auto mode routine (runs first) ----
     temp_saved = load_temp_saved_state()
     ac_in_auto = ac.state.mode == MIDEA_AUTO_MODE and ac.state.running
-    temp_reset_f = DESIRED_ROOM_TEMP_F - TEMP_RESET_OFFSET_F
+    temp_reset_f = DESIRED_ROOM_TEMP_F
+    desired_temp_c = (DESIRED_ROOM_TEMP_F - 32) * 5 / 9
     temp_action_taken = "no action"
 
     if govee_temp_f >= DESIRED_ROOM_TEMP_F and temp_saved is None:
         temp_snapshot = current_snapshot(ac)
         save_temp_state(temp_snapshot)
         print(f"Room temp {govee_temp_f}F >= desired {DESIRED_ROOM_TEMP_F}F — "
-              f"saving state {temp_snapshot} and switching to Auto mode.")
-        ac.set_state(mode=MIDEA_AUTO_MODE, running=True, cloud=cloud)
+              f"saving state {temp_snapshot} and switching to Auto mode at "
+              f"{desired_temp_c:.1f}C.")
+        ac.set_state(mode=MIDEA_AUTO_MODE, running=True,
+                     target_temperature=desired_temp_c, cloud=cloud)
         temp_action_taken = "turned ON (switched to Auto mode)"
 
     elif govee_temp_f >= DESIRED_ROOM_TEMP_F and temp_saved is not None and not ac_in_auto:
         print(f"Room temp still >= desired {DESIRED_ROOM_TEMP_F}F and an "
               f"override is recorded, but the AC isn't actually in Auto mode "
               f"(mode={ac.state.mode} running={ac.state.running}) — "
-              f"re-asserting Auto mode without touching the saved state.")
-        ac.set_state(mode=MIDEA_AUTO_MODE, running=True, cloud=cloud)
+              f"re-asserting Auto mode at {desired_temp_c:.1f}C without "
+              f"touching the saved state.")
+        ac.set_state(mode=MIDEA_AUTO_MODE, running=True,
+                     target_temperature=desired_temp_c, cloud=cloud)
         temp_action_taken = "turned ON (re-asserted Auto mode)"
 
     elif govee_temp_f < temp_reset_f and temp_saved is not None:
