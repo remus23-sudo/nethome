@@ -23,6 +23,12 @@ jobs:
           pip install -r requirements.txt
           pip install requests
 
+      - name: Initial start delay
+        if: vars.START_DELAY_SECONDS != '' && vars.START_DELAY_SECONDS != '0'
+        run: |
+          echo "Delaying start by ${{ vars.START_DELAY_SECONDS }} seconds..."
+          sleep ${{ vars.START_DELAY_SECONDS }}
+
       # ------------------------------------------------------------------
       # Cycle 1 (give Auto mode priority)
       # ------------------------------------------------------------------
