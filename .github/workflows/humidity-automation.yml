@@ -33,17 +33,18 @@ jobs:
           MIDEA_ACCOUNT: ${{ secrets.MIDEA_ACCOUNT }}
           MIDEA_PASSWORD: ${{ secrets.MIDEA_PASSWORD }}
           HUMIDITY_TRIGGER: ${{ vars.HUMIDITY_TRIGGER }}
-          HUMIDITY_RESET: ${{ vars.HUMIDITY_RESET }}
           MAX_TEMP_ALERT_F: ${{ vars.MAX_TEMP_ALERT_F }}
           DESIRED_ROOM_TEMP_F: ${{ vars.DESIRED_ROOM_TEMP_F }}
+          MAINTENANCE_START: ${{ vars.MAINTENANCE_START }}
+          MAINTENANCE_END: ${{ vars.MAINTENANCE_END }}
+          GIVE_AUTO_PRIORITY: "true"
         run: python automate.py
 
       - name: Email status (cycle 1 - pausing 10 min)
         if: >-
           always() && steps.run1.outputs.humidity != '' &&
           (vars.EMAIL_NOTIFICATIONS == 'All' ||
-           (vars.EMAIL_NOTIFICATIONS == 'Action' &&
-            (steps.run1.outputs.action_occurred == 'true' || steps.run1.outputs.temp_action_occurred == 'true' || steps.run1.outputs.comfort_off_occurred == 'true')) ||
+           (vars.EMAIL_NOTIFICATIONS == 'Action' && steps.run1.outputs.action_occurred == 'true') ||
            steps.run1.outputs.high_temp_alert == 'true')
         uses: dawidd6/action-send-mail@v3
         with:
@@ -59,34 +60,31 @@ jobs:
 
             High-temp alert: ${{ steps.run1.outputs.alert_message }} (limit ${{ vars.MAX_TEMP_ALERT_F }}°F)
 
-            Humidity: ${{ steps.run1.outputs.humidity }}%
-            Action (humidity/dry mode): ${{ steps.run1.outputs.action }}
-            Thresholds used: trigger=${{ steps.run1.outputs.trigger }}% reset=${{ steps.run1.outputs.reset }}%
-
-            Action (temp/auto mode): ${{ steps.run1.outputs.temp_action }}
-            Desired room temp: ${{ steps.run1.outputs.desired_temp_f }}°F (restores below ${{ steps.run1.outputs.temp_reset_f }}°F)
-
-            Action (comfort off - cool & dry): ${{ steps.run1.outputs.comfort_off_action }}
+            Humidity: ${{ steps.run1.outputs.humidity }}% (trigger: ${{ steps.run1.outputs.humidity_trigger }}%)
+            Govee temp: ${{ steps.run1.outputs.govee_temp_f }}°F (desired: ${{ steps.run1.outputs.desired_temp_f }}°F)
+            Action: ${{ steps.run1.outputs.action }}
 
             AC state:
               mode: ${{ steps.run1.outputs.mode }} (${{ steps.run1.outputs.mode_name }})
               running: ${{ steps.run1.outputs.running }}
-              current indoor temp (Govee): ${{ steps.run1.outputs.govee_temp_f }}°F
               current indoor temp (AC unit): ${{ steps.run1.outputs.ac_indoor_f }}°F
               target temperature: ${{ steps.run1.outputs.target }} (${{ steps.run1.outputs.target_f }}F)
               fan speed: ${{ steps.run1.outputs.fan }}
 
-      - name: Commit state after cycle 1
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          if [ -n "$(git status --porcelain)" ]; then
-            git add -A
-            git commit -m "Update saved AC state (cycle 1) [skip ci]"
-            git push
-          else
-            echo "No change to state.json"
-          fi
+      - name: Maintenance window skip email (cycle 1)
+        if: always() && steps.run1.outputs.maintenance_skipped == 'true' && vars.EMAIL_NOTIFICATIONS == 'All'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "AC automation (cycle 1): skipped — inside maintenance window"
+          to: ${{ secrets.MAIL_USERNAME }}
+          from: NetHome Automation
+          body: |
+            Cycle 1 skipped entirely — current time is inside the maintenance
+            window (${{ vars.MAINTENANCE_START }} - ${{ vars.MAINTENANCE_END }} Pacific Time).
 
       - name: Pause 10 minutes before second check
         run: sleep 600
@@ -101,17 +99,18 @@ jobs:
           MIDEA_ACCOUNT: ${{ secrets.MIDEA_ACCOUNT }}
           MIDEA_PASSWORD: ${{ secrets.MIDEA_PASSWORD }}
           HUMIDITY_TRIGGER: ${{ vars.HUMIDITY_TRIGGER }}
-          HUMIDITY_RESET: ${{ vars.HUMIDITY_RESET }}
           MAX_TEMP_ALERT_F: ${{ vars.MAX_TEMP_ALERT_F }}
           DESIRED_ROOM_TEMP_F: ${{ vars.DESIRED_ROOM_TEMP_F }}
+          MAINTENANCE_START: ${{ vars.MAINTENANCE_START }}
+          MAINTENANCE_END: ${{ vars.MAINTENANCE_END }}
+          GIVE_AUTO_PRIORITY: "false"
         run: python automate.py
 
       - name: Email status (cycle 2 - completion)
         if: >-
           always() && steps.run2.outputs.humidity != '' &&
           (vars.EMAIL_NOTIFICATIONS == 'All' ||
-           (vars.EMAIL_NOTIFICATIONS == 'Action' &&
-            (steps.run2.outputs.action_occurred == 'true' || steps.run2.outputs.temp_action_occurred == 'true' || steps.run2.outputs.comfort_off_occurred == 'true')) ||
+           (vars.EMAIL_NOTIFICATIONS == 'Action' && steps.run2.outputs.action_occurred == 'true') ||
            steps.run2.outputs.high_temp_alert == 'true')
         uses: dawidd6/action-send-mail@v3
         with:
@@ -127,31 +126,28 @@ jobs:
 
             High-temp alert: ${{ steps.run2.outputs.alert_message }} (limit ${{ vars.MAX_TEMP_ALERT_F }}°F)
 
-            Humidity: ${{ steps.run2.outputs.humidity }}%
-            Action (humidity/dry mode): ${{ steps.run2.outputs.action }}
-            Thresholds used: trigger=${{ steps.run2.outputs.trigger }}% reset=${{ steps.run2.outputs.reset }}%
-
-            Action (temp/auto mode): ${{ steps.run2.outputs.temp_action }}
-            Desired room temp: ${{ steps.run2.outputs.desired_temp_f }}°F (restores below ${{ steps.run2.outputs.temp_reset_f }}°F)
-
-            Action (comfort off - cool & dry): ${{ steps.run2.outputs.comfort_off_action }}
+            Humidity: ${{ steps.run2.outputs.humidity }}% (trigger: ${{ steps.run2.outputs.humidity_trigger }}%)
+            Govee temp: ${{ steps.run2.outputs.govee_temp_f }}°F (desired: ${{ steps.run2.outputs.desired_temp_f }}°F)
+            Action: ${{ steps.run2.outputs.action }}
 
             AC state:
               mode: ${{ steps.run2.outputs.mode }} (${{ steps.run2.outputs.mode_name }})
               running: ${{ steps.run2.outputs.running }}
-              current indoor temp (Govee): ${{ steps.run2.outputs.govee_temp_f }}°F
               current indoor temp (AC unit): ${{ steps.run2.outputs.ac_indoor_f }}°F
               target temperature: ${{ steps.run2.outputs.target }} (${{ steps.run2.outputs.target_f }}F)
               fan speed: ${{ steps.run2.outputs.fan }}
 
-      - name: Commit state after cycle 2
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          if [ -n "$(git status --porcelain)" ]; then
-            git add -A
-            git commit -m "Update saved AC state (cycle 2) [skip ci]"
-            git push
-          else
-            echo "No change to state.json"
-          fi
+      - name: Maintenance window skip email (cycle 2)
+        if: always() && steps.run2.outputs.maintenance_skipped == 'true' && vars.EMAIL_NOTIFICATIONS == 'All'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "AC automation (cycle 2): skipped — inside maintenance window"
+          to: ${{ secrets.MAIL_USERNAME }}
+          from: NetHome Automation
+          body: |
+            Cycle 2 skipped entirely — current time is inside the maintenance
+            window (${{ vars.MAINTENANCE_START }} - ${{ vars.MAINTENANCE_END }} Pacific Time).
