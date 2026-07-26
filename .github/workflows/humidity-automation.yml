@@ -95,6 +95,7 @@ jobs:
             window (${{ vars.MAINTENANCE_START }} - ${{ vars.MAINTENANCE_END }} Pacific Time).
 
       - name: Pause 10 minutes before second check
+        if: steps.run1.outputs.maintenance_skipped != 'true'
         run: sleep 600
 
       # ------------------------------------------------------------------
@@ -102,6 +103,7 @@ jobs:
       # ------------------------------------------------------------------
       - name: Run automation (cycle 2)
         id: run2
+        if: steps.run1.outputs.maintenance_skipped != 'true'
         env:
           GOVEE_API_KEY: ${{ secrets.GOVEE_API_KEY }}
           GOVEE_SKU: ${{ secrets.GOVEE_SKU }}
@@ -118,7 +120,8 @@ jobs:
 
       - name: Email status (cycle 2 - pausing 10 min)
         if: >-
-          always() && steps.run2.outputs.humidity != '' &&
+          always() && steps.run1.outputs.maintenance_skipped != 'true' &&
+          steps.run2.outputs.humidity != '' &&
           (vars.EMAIL_NOTIFICATIONS == 'All' ||
            (vars.EMAIL_NOTIFICATIONS == 'Action' && steps.run2.outputs.action_occurred == 'true') ||
            steps.run2.outputs.high_temp_alert == 'true')
@@ -148,7 +151,7 @@ jobs:
               fan speed: ${{ steps.run2.outputs.fan }}
 
       - name: Maintenance window skip email (cycle 2)
-        if: always() && steps.run2.outputs.maintenance_skipped == 'true' && vars.EMAIL_NOTIFICATIONS == 'All'
+        if: always() && steps.run1.outputs.maintenance_skipped != 'true' && steps.run2.outputs.maintenance_skipped == 'true' && vars.EMAIL_NOTIFICATIONS == 'All'
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
@@ -163,6 +166,7 @@ jobs:
             window (${{ vars.MAINTENANCE_START }} - ${{ vars.MAINTENANCE_END }} Pacific Time).
 
       - name: Pause 10 minutes before third check
+        if: steps.run1.outputs.maintenance_skipped != 'true' && steps.run2.outputs.maintenance_skipped != 'true'
         run: sleep 600
 
       # ------------------------------------------------------------------
@@ -170,6 +174,7 @@ jobs:
       # ------------------------------------------------------------------
       - name: Run automation (cycle 3)
         id: run3
+        if: steps.run1.outputs.maintenance_skipped != 'true' && steps.run2.outputs.maintenance_skipped != 'true'
         env:
           GOVEE_API_KEY: ${{ secrets.GOVEE_API_KEY }}
           GOVEE_SKU: ${{ secrets.GOVEE_SKU }}
@@ -186,7 +191,9 @@ jobs:
 
       - name: Email status (cycle 3 - completion)
         if: >-
-          always() && steps.run3.outputs.humidity != '' &&
+          always() && steps.run1.outputs.maintenance_skipped != 'true' &&
+          steps.run2.outputs.maintenance_skipped != 'true' &&
+          steps.run3.outputs.humidity != '' &&
           (vars.EMAIL_NOTIFICATIONS == 'All' ||
            (vars.EMAIL_NOTIFICATIONS == 'Action' && steps.run3.outputs.action_occurred == 'true') ||
            steps.run3.outputs.high_temp_alert == 'true')
@@ -216,7 +223,7 @@ jobs:
               fan speed: ${{ steps.run3.outputs.fan }}
 
       - name: Maintenance window skip email (cycle 3)
-        if: always() && steps.run3.outputs.maintenance_skipped == 'true' && vars.EMAIL_NOTIFICATIONS == 'All'
+        if: always() && steps.run1.outputs.maintenance_skipped != 'true' && steps.run2.outputs.maintenance_skipped != 'true' && steps.run3.outputs.maintenance_skipped == 'true' && vars.EMAIL_NOTIFICATIONS == 'All'
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
